@@ -20,8 +20,8 @@ except ImportError:
 
 
 app = FastAPI(
-    title="Git PR Review Agent API",
-    description="Autonomous Git & PR Review Agent for code quality, secret detection, and automated PR descriptions.",
+    title="Jarvis - A PR Review Agent API",
+    description="Jarvis: Autonomous Git & PR Review Agent with 5-Layer Guardrails, secret detection, code quality review, and automated Conventional PR descriptions.",
     version="1.0.0"
 ) if FASTAPI_AVAILABLE else None
 
@@ -114,7 +114,7 @@ def run_cli():
             print("FastAPI or uvicorn not installed. Please install requirements: pip install -r requirements.txt")
             sys.exit(1)
         import uvicorn
-        print(f"\n🚀 Launching Git PR Review Agent API at http://localhost:{args.port} (Docs at /docs)")
+        print(f"\n🚀 Launching Jarvis - A PR Review Agent API at http://localhost:{args.port} (Docs at /docs)")
         uvicorn.run("main:app", host=args.host, port=args.port, reload=False)
         return
 
@@ -128,7 +128,7 @@ def run_cli():
         print(f"Error initializing agent: {e}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\n🔎 Git PR Review Agent activated using [{agent.model_label}]...")
+    print(f"\n🔎 Jarvis - A PR Review Agent activated using [{agent.model_label}]...")
 
     if args.diff_file:
         if not os.path.exists(args.diff_file):

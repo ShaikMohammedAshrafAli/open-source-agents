@@ -1,6 +1,6 @@
-# Git PR Review Agent (MergeGuard)
+# Jarvis — A PR Review Agent
 
-> An autonomous AI agent for security audit, code quality review, and automated Conventional Pull Request description generation from Git diffs, powered by a Dual-Engine architecture (Local Gemma 2 + Cloud Gemini).
+> An autonomous AI agent for security audit, 5-layer guardrail defense, code quality review, and automated Conventional Pull Request description generation from Git diffs, powered by a Dual-Engine architecture (Local Gemma 2 + Cloud Gemini).
 
 ---
 
@@ -8,9 +8,10 @@
 
 ### Problem Statement & Intended Users
 - **Problem**: Open-source maintainers and developers face severe review fatigue. Code reviews are bogged down by manual checks for basic hygiene (leaked credentials, hardcoded keys, missing unit tests, unpinned dependencies) and writing detailed PR descriptions. Developers often submit PRs with empty or vague descriptions, making peer review tedious and increasing the risk of accidental secret leaks reaching production.
-- **Intended Users**: Software engineers, open-source contributors, devops engineers, and tech leads who want instant pre-commit or pre-merge feedback and automated PR documentation directly in their terminal or CI/CD pipelines.
+- **Intended Users**: Software engineers, open-source contributors, devops engineers, and tech leads who want instant pre-commit or pre-merge feedback, deterministic security guardrails, and automated PR documentation directly in their terminal or CI/CD pipelines.
 
 ### Key Features
+- **5-Layer Guardrail Architecture**: Defense-in-depth security that combines deterministic pre-LLM secret scanning, anti-pattern execution blocking, noise filtering, and policy enforcement overrides.
 - **Dual-Engine Architecture**:
   - **Local Gemma 2 / Privacy Engine**: Scans code diffs locally and offline for sensitive secrets, credentials, and syntax anti-patterns without sending private code to the cloud.
   - **Cloud Gemini 2.5 / Architect Engine**: Analyzes architectural impact, evaluates breaking changes, and generates complete Conventional PR summaries with verification checklists.
@@ -18,6 +19,60 @@
 - **Deterministic Secret & Vulnerability Scan**: Instant pre-LLM detection of leaked API keys (Google AI, GitHub PATs, OpenAI, AWS, Stripe), committed `.env` files, and dangerous patterns (`eval()`, `exec()`, raw SQL string formatting).
 - **Dual Interface (CLI & REST API)**: Execute as a fast terminal tool (`python main.py`) or run as a standalone FastAPI service (`python main.py --serve`) with interactive Swagger documentation.
 - **Strict Risk Scoring & Verdicts**: Assigns a risk score (0-100) and authoritative review verdicts (`APPROVE`, `REQUEST_CHANGES`, `COMMENT`).
+
+---
+
+## 🛡️ 5-Layer Guardrail Architecture
+
+Jarvis is architected with **Defense-in-Depth**. Rather than relying solely on probabilistic LLMs which can hallucinate or miss obscure vulnerabilities, Jarvis enforces 5 distinct guardrail tiers:
+
+```
+[ Incoming Git Diff ]
+          │
+          ▼
+┌────────────────────────────────────────────────────────┐
+│ Layer 1: Context & DOS Guard                           │
+│ Strips lockfiles (package-lock.json), minified assets, │
+│ and binary blobs to protect LLM context windows.       │
+└─────────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+┌────────────────────────────────────────────────────────┐
+│ Layer 2: Deterministic Secret Shield (Pre-LLM)         │
+│ Zero-hallucination regex audit for Google AI keys,     │
+│ GitHub PATs, AWS/Stripe tokens, & committed .env files │
+└─────────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+┌────────────────────────────────────────────────────────┐
+│ Layer 3: Code Injection & Anti-Pattern Guard           │
+│ Catches arbitrary code execution risks: eval(), exec(),│
+│ subprocess(shell=True), and raw SQL string injections. │
+└─────────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+┌────────────────────────────────────────────────────────┐
+│ Layer 4: Air-Gapped Privacy Guard (Local Gemma 2)      │
+│ In offline mode, diffs are reviewed 100% locally on-box│
+│ using Ollama (gemma2:2b). Zero bytes leave your machine│
+└─────────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+┌────────────────────────────────────────────────────────┐
+│ Layer 5: Authoritative Verdict Escalation Guard        │
+│ The LLM is forbidden from approving unsafe code:       │
+│ If Critical issues exist, verdict is FORCE-OVERRIDDEN  │
+│ to REQUEST_CHANGES and risk score escalated to >= 85.  │
+└────────────────────────────────────────────────────────┘
+```
+
+| Guardrail Layer | Category | Enforcement Mechanism |
+| :--- | :--- | :--- |
+| **Layer 1: Context & DOS Guard** | Input Hygiene | Automatically filters noise diffs (`package-lock.json`, minified bundles, images) before tokenization in `git_utils.py`. |
+| **Layer 2: Secret Shield (Pre-LLM)** | Data Security | Pre-LLM static regex audit catching Google AI keys, GitHub PATs, AWS secrets, and private keys in `security_scanner.py`. |
+| **Layer 3: Anti-Pattern Guard** | Vulnerability Defense | Scans for remote code execution anti-patterns (`eval()`, `exec()`, `shell=True`, SQL injection) before LLM synthesis. |
+| **Layer 4: Air-Gapped Privacy Guard** | Data Leak Prevention | Local offline execution via Google Gemma 2 (`gemma2:2b`) ensuring proprietary code never leaves the developer's laptop. |
+| **Layer 5: Verdict Escalation Guard** | Policy & Output Safety | Deterministic rule in `agent.py` overriding LLM output: if critical security flaws exist, verdict is forcibly set to `REQUEST_CHANGES`. |
 
 ---
 
