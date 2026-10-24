@@ -1,64 +1,98 @@
-# Git PR Review Agent
+# Git PR Review Agent (MergeGuard)
 
-> An autonomous AI agent for security audit, code quality review, and automated Conventional Pull Request description generation from Git diffs.
+> An autonomous AI agent for security audit, code quality review, and automated Conventional Pull Request description generation from Git diffs, powered by a Dual-Engine architecture (Local Gemma 2 + Cloud Gemini).
 
 ---
 
 ## Overview
 
 ### Problem Statement & Intended Users
-- **Problem**: Code reviews are frequently slowed down by manual verification of basic hygiene (leaked credentials, hardcoded keys, missing tests, unpinned dependencies) and writing detailed PR descriptions. Developers often submit PRs with empty or vague descriptions, making peer review tedious and increasing the risk of accidental secret leaks reaching production.
-- **Intended Users**: Software engineers, open-source contributors, devops engineers, and tech leads who want instant, pre-commit or pre-merge feedback and automated PR documentation directly in their terminal or CI/CD pipelines.
+- **Problem**: Open-source maintainers and developers face severe review fatigue. Code reviews are bogged down by manual checks for basic hygiene (leaked credentials, hardcoded keys, missing unit tests, unpinned dependencies) and writing detailed PR descriptions. Developers often submit PRs with empty or vague descriptions, making peer review tedious and increasing the risk of accidental secret leaks reaching production.
+- **Intended Users**: Software engineers, open-source contributors, devops engineers, and tech leads who want instant pre-commit or pre-merge feedback and automated PR documentation directly in their terminal or CI/CD pipelines.
 
 ### Key Features
+- **Dual-Engine Architecture**:
+  - **Local Gemma 2 / Privacy Engine**: Scans code diffs locally and offline for sensitive secrets, credentials, and syntax anti-patterns without sending private code to the cloud.
+  - **Cloud Gemini 2.5 / Architect Engine**: Analyzes architectural impact, evaluates breaking changes, and generates complete Conventional PR summaries with verification checklists.
+  - **Zero-Credential Mock Engine**: Built-in deterministic mock provider for instant CI/CD test runs without API keys.
 - **Deterministic Secret & Vulnerability Scan**: Instant pre-LLM detection of leaked API keys (Google AI, GitHub PATs, OpenAI, AWS, Stripe), committed `.env` files, and dangerous patterns (`eval()`, `exec()`, raw SQL string formatting).
-- **Multi-Model Flexibility**: Built for Google Gemini (`gemini-2.5-flash`, `gemini-1.5-flash`), local offline Google Gemma 2 (`gemma2:2b` via Ollama), and a zero-credential Mock engine for instant CI testing.
-- **Automated Conventional PR Generation**: Synthesizes git diffs into structured Markdown PR descriptions with standardized titles (`feat(...)`, `fix(...)`), change summaries, architectural notes, and verification checklists.
 - **Dual Interface (CLI & REST API)**: Execute as a fast terminal tool (`python main.py`) or run as a standalone FastAPI service (`python main.py --serve`) with interactive Swagger documentation.
 - **Strict Risk Scoring & Verdicts**: Assigns a risk score (0-100) and authoritative review verdicts (`APPROVE`, `REQUEST_CHANGES`, `COMMENT`).
 
 ---
 
-## Technical Stack
+## High-Level Design (HLD)
 
-- **Language & Runtime**: Python 3.9+ / 3.12+
-- **Agent Framework / Core Library**: Custom multi-stage agent pipeline (`git_utils`, `security_scanner`, `llm_client`, `agent`)
-- **API Framework**: FastAPI & Uvicorn (interactive REST API and Swagger UI at `/docs`)
-- **Models**:
-  - Google Gemini 2.5 Flash / Gemini 1.5 Flash (via `google-genai` / `google-generativeai`)
-  - Google Gemma 2 (`gemma2:2b` local offline inference via Ollama)
-  - Built-in Mock Agent Engine (deterministic, zero-network test suite)
-- **Validation & Tooling**: Pydantic v2, Pytest, python-dotenv
+The High-Level Design follows a modular, dual-tier inspection pipeline designed for high security, low latency, and framework independence:
+
+```mermaid
+flowchart TD
+    User["Developer / Contributor"] -->|git diff / CLI / REST API| Ingest["Ingestion & Chunking Layer"]
+    Ingest --> NoiseFilter["Noise Filter (strips lockfiles, minified assets, binaries)"]
+    
+    subgraph Privacy_Tier["Privacy & Security Layer (Offline)"]
+        NoiseFilter --> SecScan["Deterministic Secret Scanner (Regex & Heuristics)"]
+        SecScan --> LocalGemma["Local Gemma 2 via Ollama (Air-gapped Review)"]
+    end
+    
+    subgraph Architect_Tier["Cloud / Reasoning Tier"]
+        NoiseFilter --> CloudGemini["Google Gemini 2.5 Flash / Pro (Deep Reasoning)"]
+        CloudGemini --> PRSynth["Conventional PR Synthesizer"]
+    end
+    
+    SecScan --> Aggregator["Finding Aggregator & Risk Engine"]
+    LocalGemma --> Aggregator
+    CloudGemini --> Aggregator
+    PRSynth --> Aggregator
+    
+    Aggregator --> Output["Review Report & Markdown PR Description"]
+    Output --> CLI_Out["Terminal CLI / pr_description.md"]
+    Output --> API_Out["FastAPI REST Endpoints (/docs)"]
+```
 
 ---
 
-## Architecture & Data Flow
+## Low-Level Design (LLD)
 
+The Low-Level Design decomposes the agent into discrete, single-responsibility modules:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant CLI as main.py (CLI / FastAPI)
+    participant Agent as GitPRReviewAgent (agent.py)
+    participant Git as git_utils.py
+    participant Sec as security_scanner.py
+    participant LLM as llm_client.py (Gemini / Gemma / Mock)
+    
+    Dev->>CLI: python main.py --branch main
+    CLI->>Agent: review_repository(repo_path, base_branch)
+    Agent->>Git: get_git_diff(base_branch)
+    Git-->>Agent: (filtered_diff, stats)
+    
+    par Security Pre-Scan
+        Agent->>Sec: scan_diff_for_security_issues(diff)
+        Sec-->>Agent: List[ReviewIssue] (CRITICAL, WARNING)
+    and Model Reasoning
+        Agent->>LLM: review_diff(diff, stats)
+        LLM-->>Agent: JSON (pr_summary, issues, risk_score, verdict)
+    end
+    
+    Agent->>Agent: Merge & deduplicate issues
+    Agent->>Agent: Escalate risk score if secrets detected (verdict=REQUEST_CHANGES)
+    Agent->>Agent: generate_markdown_pr(report)
+    Agent-->>CLI: ReviewReport + Markdown String
+    CLI-->>Dev: Formatted Terminal Summary / pr_description.md
 ```
-[Git Working Tree / Diff File]
-              │
-              ▼
-    [Git Chunker & Filter] ─── (strips lockfiles, minified assets, binaries)
-              │
-              ├──► [Deterministic Security Scanner] ──► [Critical Leaks / Anti-Patterns]
-              │                                                     │
-              ▼                                                     ▼
-     [LLM Review Agent] ───────────────────────────────► [Issue Aggregator & Deduplicator]
-    (Gemini / Gemma 2 / Mock)                                       │
-              │                                                     ▼
-              ▼                                             [Risk Scorer & Verdict]
-    [PR Summary Synthesizer]                                (APPROVE / REQUEST_CHANGES)
-              │                                                     │
-              └─────────────────────┬───────────────────────────────┘
-                                    │
-                                    ▼
-                     [Structured Review Report]
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-       [Markdown PR Description]          [REST API / JSON Payload]
-        (pr_description.md / CLI)          (/api/review & /api/health)
-```
+
+### Component Details
+1. **`git_utils.py`**: Interacts with the local git repository using subprocess without `shell=True`. Filters out high-churn generated files (`package-lock.json`, minified bundles, images) and computes changed line metrics.
+2. **`security_scanner.py`**: Pure Python regex engine with zero external dependencies. Pre-screens diffs against high-entropy API key patterns and dangerous code execution calls (`eval`, `exec`, `subprocess.Popen(..., shell=True)`).
+3. **`llm_client.py`**: Provider abstraction wrapping `google-genai` (Gemini 2.5 Flash / 1.5 Flash), local Ollama HTTP API (`gemma2:2b`), and `MockProvider`. Enforces structured JSON output matching Pydantic schemas.
+4. **`agent.py`**: Coordinates the pipeline, aggregates findings, enforces verdict rules (any critical secret automatically overrides verdict to `REQUEST_CHANGES` and sets risk score $\ge 85$), and generates clean GitHub Flavored Markdown.
+5. **`models.py`**: Pydantic v2 schemas defining `ReviewIssue`, `PullRequestSummary`, `ReviewReport`, and `ReviewRequest`.
+6. **`main.py`**: Unified entrypoint supporting CLI arguments (`--branch`, `--staged`, `--diff-file`, `--json`, `--output`) and FastAPI web server mode (`--serve`).
 
 ---
 
