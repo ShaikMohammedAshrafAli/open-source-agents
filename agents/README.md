@@ -46,4 +46,4 @@ agents/<project-slug>/
 
 | Agent Directory | Description | Framework / Stack | Contributor |
 | :--- | :--- | :--- | :--- |
-| *(None yet)* | *Contributions will appear here once approved and merged.* | — | — |
+| [`git-pr-review-agent`](git-pr-review-agent/) | Autonomous security audit, code review, and automated PR description generator | Python, FastAPI, Gemini / Gemma 2 / Ollama | [@ShaikMohammedAshrafAli](https://github.com/ShaikMohammedAshrafAli) |
